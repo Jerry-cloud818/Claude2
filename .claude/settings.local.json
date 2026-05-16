@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npx electron . 2>&1)",
+      "PowerShell(npm install *)",
+      "PowerShell(npx electron --version)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(cd \"D:\\\\cursor\\\\Claude2\\\\pomodoro-app\\\\node_modules\\\\electron\"; $env:ELECTRON_MIRROR=\"https://npmmirror.com/mirrors/electron/\"; node install.js 2>&1)",
+      "PowerShell(cd \"D:\\\\cursor\\\\Claude2\\\\pomodoro-app\"; $env:ELECTRON_MIRROR=\"https://npmmirror.com/mirrors/electron/\"; npx install-electron 2>&1)",
+      "PowerShell(winget install *)",
+      "PowerShell(gh auth *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth login --web -p https 2>&1)",
+      "PowerShell(git *)"
+    ]
+  }
+}
