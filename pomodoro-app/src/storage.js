@@ -16,7 +16,7 @@ const storage = {
     return this.set('tasks', tasks);
   },
   async getStats() {
-    return this.get('stats', { daily: {}, weekly: {}, monthly: {} });
+    return this.get('stats', {});
   },
   async setStats(stats) {
     return this.set('stats', stats);

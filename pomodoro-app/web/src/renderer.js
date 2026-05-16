@@ -1,10 +1,8 @@
-(async function () {
-  // ── Modules ──
+(function () {
   const timer = new PomodoroTimer();
   const taskMgr = new TaskManager(storage);
   const statsMgr = new StatsManager(storage);
 
-  // ── Elements ──
   const $ = (sel) => document.querySelector(sel);
   const timerTime = $('#timer-time');
   const timerState = $('#timer-state');
@@ -19,30 +17,23 @@
   const tabs = document.querySelectorAll('.tab');
   const panels = document.querySelectorAll('.panel');
 
-  const CIRCUMFERENCE = 2 * Math.PI * 90; // 565.48
+  const CIRCUMFERENCE = 2 * Math.PI * 90;
 
-  // ── Init ──
-  async function init() {
-    const settings = await storage.getSettings();
+  function init() {
+    const settings = storage.getSettings();
     timer.updateSettings(settings);
-    await taskMgr.load();
-    await statsMgr.load();
+    taskMgr.load();
+    statsMgr.load();
 
-    // Apply saved theme
-    const theme = await window.api.app.getTheme();
+    const theme = storage.get('theme', 'dark');
     document.body.setAttribute('data-theme', theme);
     $('#setting-theme').checked = theme === 'dark';
 
-    // Apply saved settings to UI
     $('#setting-work').value = settings.workDuration;
     $('#setting-short').value = settings.shortBreakDuration;
     $('#setting-long').value = settings.longBreakDuration;
     $('#setting-interval').value = settings.longBreakInterval;
     $('#setting-sound').checked = settings.soundEnabled;
-
-    // Auto launch
-    const autoLaunch = await window.api.app.getAutoLaunch();
-    $('#setting-autostart').checked = autoLaunch;
 
     renderTimer(timer.getState());
     renderTasks();
@@ -50,37 +41,21 @@
     updateTimeDisplay(settings.workDuration * 60);
   }
 
-  // ── Timer Callbacks ──
-  timer.onTick = (state) => {
-    renderTimer(state);
-  };
-
-  timer.onStateChange = (state) => {
-    renderTimer(state);
-    updateStartButton(state);
-  };
-
-  timer.onComplete = async (type, count) => {
-    await statsMgr.recordPomodoro();
-    await taskMgr.incrementPomodoro();
+  timer.onTick = (state) => renderTimer(state);
+  timer.onStateChange = (state) => { renderTimer(state); updateStartButton(state); };
+  timer.onComplete = (type, count) => {
+    statsMgr.recordPomodoro();
+    taskMgr.incrementPomodoro();
     renderStats();
     renderTasks();
   };
 
-  // ── Timer Rendering ──
   function renderTimer(state) {
     updateTimeDisplay(state.remainingSeconds);
     updateProgress(state.progress);
     updateDots(state.pomodoroCount, state.state);
     updateBodyMode(state.state);
-
-    const stateTexts = {
-      idle: '准备开始',
-      work: '专注中',
-      shortBreak: '短休息',
-      longBreak: '长休息',
-      paused: '已暂停',
-    };
+    const stateTexts = { idle: '准备开始', work: '专注中', shortBreak: '短休息', longBreak: '长休息', paused: '已暂停' };
     timerState.textContent = stateTexts[state.state] || '';
     timerState.className = 'timer-state' + (state.state === 'work' ? ' working' : '');
   }
@@ -92,28 +67,20 @@
   }
 
   function updateProgress(progress) {
-    const offset = CIRCUMFERENCE * (1 - progress);
-    timerProgress.style.strokeDashoffset = offset;
+    timerProgress.style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
   }
 
   function updateDots(count, state) {
     for (let i = 0; i < 4; i++) {
       let active = false;
-      if (i === 0 && state !== 'idle') {
-        // First dot: always on when not idle (current mode indicator)
-        active = true;
-      }
-      if (i > 0) {
-        // Dots 2-4: show pomodoro progress (1st done = dot 2, etc.)
-        active = i <= count;
-      }
+      if (i === 0 && state !== 'idle') active = true;
+      if (i > 0) active = i <= count;
       pomodoroDots[i].classList.toggle('active', active);
     }
   }
 
   function updateBodyMode(state) {
-    const isBreak = state === 'shortBreak' || state === 'longBreak';
-    document.body.classList.toggle('break-mode', isBreak);
+    document.body.classList.toggle('break-mode', state === 'shortBreak' || state === 'longBreak');
   }
 
   function updateStartButton(state) {
@@ -124,22 +91,16 @@
     }
   }
 
-  // ── Tasks Rendering ──
   function renderTasks() {
     const tasks = taskMgr.getAll();
     taskList.innerHTML = '';
-
     if (tasks.length === 0) {
       taskList.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px;">暂无任务，添加一个开始吧</div>';
       return;
     }
-
     tasks.forEach((task) => {
       const div = document.createElement('div');
-      div.className = 'task-item' +
-        (task.completed ? ' completed' : '') +
-        (taskMgr.activeTaskId === task.id ? ' active-task' : '');
-
+      div.className = 'task-item' + (task.completed ? ' completed' : '') + (taskMgr.activeTaskId === task.id ? ' active-task' : '');
       div.innerHTML = `
         <div class="task-check ${task.completed ? 'checked' : ''}" data-id="${task.id}"></div>
         <span class="task-name" data-id="${task.id}" title="${task.name}">${task.name}</span>
@@ -150,22 +111,18 @@
     });
   }
 
-  // ── Stats Rendering ──
   function renderStats() {
     const today = Number(statsMgr.getToday()) || 0;
     const week = Number(statsMgr.getThisWeek()) || 0;
     const month = Number(statsMgr.getThisMonth()) || 0;
     const total = Number(statsMgr.getTotal()) || 0;
-
     $('#stat-today').textContent = today;
     $('#stat-week').textContent = week;
     $('#stat-total').textContent = total;
-
     $('#detail-today').textContent = `${today} 个番茄`;
     $('#detail-week').textContent = `${week} 个番茄`;
     $('#detail-month').textContent = `${month} 个番茄`;
     $('#detail-total').textContent = `${total} 个番茄`;
-
     drawChart();
   }
 
@@ -174,85 +131,47 @@
     const canvas = statsChart;
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
-
     canvas.width = canvas.offsetWidth * dpr;
     canvas.height = canvas.offsetHeight * dpr;
     ctx.scale(dpr, dpr);
-
-    const w = canvas.offsetWidth;
-    const h = canvas.offsetHeight;
+    const w = canvas.offsetWidth, h = canvas.offsetHeight;
     const padding = { top: 20, right: 10, bottom: 30, left: 30 };
     const chartW = w - padding.left - padding.right;
     const chartH = h - padding.top - padding.bottom;
-
     ctx.clearRect(0, 0, w, h);
-
     const maxVal = Math.max(...data.map((d) => Number(d.value) || 0), 1);
     const barWidth = chartW / data.length * 0.6;
     const gap = chartW / data.length;
-
-    // Get theme colors
     const style = getComputedStyle(document.documentElement);
     const accentColor = style.getPropertyValue('--accent').trim();
     const textMuted = style.getPropertyValue('--text-muted').trim();
     const borderColor = style.getPropertyValue('--border').trim();
-
-    // Draw grid lines
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 0.5;
+    ctx.strokeStyle = borderColor; ctx.lineWidth = 0.5;
     for (let i = 0; i <= 4; i++) {
       const y = padding.top + (chartH / 4) * i;
-      ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(w - padding.right, y);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(padding.left, y); ctx.lineTo(w - padding.right, y); ctx.stroke();
     }
-
-    // Draw bars
     data.forEach((d, i) => {
       const val = Number(d.value) || 0;
       const x = padding.left + gap * i + (gap - barWidth) / 2;
       const barH = (val / maxVal) * chartH;
       const y = padding.top + chartH - barH;
-
-      // Bar
-      ctx.fillStyle = accentColor;
-      ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barH, [4, 4, 0, 0]);
-      ctx.fill();
-
-      // Value on top
+      ctx.fillStyle = accentColor; ctx.beginPath(); ctx.roundRect(x, y, barWidth, barH, [4, 4, 0, 0]); ctx.fill();
       if (val > 0) {
-        ctx.fillStyle = textMuted;
-        ctx.font = '11px Segoe UI';
-        ctx.textAlign = 'center';
+        ctx.fillStyle = textMuted; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
         ctx.fillText(val, x + barWidth / 2, y - 6);
       }
-
-      // Day label
-      ctx.fillStyle = textMuted;
-      ctx.font = '11px Segoe UI';
-      ctx.textAlign = 'center';
+      ctx.fillStyle = textMuted; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
       ctx.fillText(d.label, x + barWidth / 2, h - 8);
     });
   }
 
-  // ── Event Listeners ──
-
-  // Title bar
-  $('#btn-minimize').addEventListener('click', () => window.api.window.minimize());
-  $('#btn-close').addEventListener('click', () => window.api.window.close());
-
   // Timer controls
   btnStart.addEventListener('click', () => {
     const s = timer.getState();
-    if (s.state === 'idle' || s.state === 'paused' || !s.running) {
-      timer.start();
-    } else {
-      timer.pause();
-    }
+    if (s.state === 'idle' || s.state === 'paused' || !s.running) timer.start();
+    else timer.pause();
   });
-
   btnReset.addEventListener('click', () => timer.reset());
   btnSkip.addEventListener('click', () => timer.skip());
 
@@ -268,46 +187,26 @@
   });
 
   // Tasks
-  $('#btn-add-task').addEventListener('click', async () => {
+  $('#btn-add-task').addEventListener('click', () => {
     const name = taskInput.value.trim();
-    if (name) {
-      await taskMgr.add(name);
-      taskInput.value = '';
-      renderTasks();
-    }
+    if (name) { taskMgr.add(name); taskInput.value = ''; renderTasks(); }
   });
-
-  taskInput.addEventListener('keydown', async (e) => {
+  taskInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       const name = taskInput.value.trim();
-      if (name) {
-        await taskMgr.add(name);
-        taskInput.value = '';
-        renderTasks();
-      }
+      if (name) { taskMgr.add(name); taskInput.value = ''; renderTasks(); }
     }
   });
-
-  taskList.addEventListener('click', async (e) => {
-    const target = e.target;
-    const id = target.dataset.id;
+  taskList.addEventListener('click', (e) => {
+    const target = e.target, id = target.dataset.id;
     if (!id) return;
-
-    if (target.classList.contains('task-check')) {
-      await taskMgr.toggleComplete(id);
-      renderTasks();
-    } else if (target.classList.contains('task-delete')) {
-      await taskMgr.delete(id);
-      renderTasks();
-    } else if (target.classList.contains('task-name')) {
-      // Set as active task
-      taskMgr.setActive(taskMgr.activeTaskId === id ? null : id);
-      renderTasks();
-    }
+    if (target.classList.contains('task-check')) { taskMgr.toggleComplete(id); renderTasks(); }
+    else if (target.classList.contains('task-delete')) { taskMgr.delete(id); renderTasks(); }
+    else if (target.classList.contains('task-name')) { taskMgr.setActive(taskMgr.activeTaskId === id ? null : id); renderTasks(); }
   });
 
   // Settings
-  async function saveSettings() {
+  function saveSettings() {
     const settings = {
       workDuration: parseInt($('#setting-work').value) || 25,
       shortBreakDuration: parseInt($('#setting-short').value) || 5,
@@ -315,33 +214,22 @@
       longBreakInterval: parseInt($('#setting-interval').value) || 4,
       soundEnabled: $('#setting-sound').checked,
     };
-    await storage.setSettings(settings);
+    storage.setSettings(settings);
     timer.updateSettings(settings);
     return settings;
   }
-
   ['setting-work', 'setting-short', 'setting-long', 'setting-interval'].forEach((id) => {
-    $(`#${id}`).addEventListener('change', async () => {
-      const settings = await saveSettings();
-      // If idle, update the display
-      if (timer.getState().state === 'idle') {
-        updateTimeDisplay(settings.workDuration * 60);
-      }
+    $(`#${id}`).addEventListener('change', () => {
+      const settings = saveSettings();
+      if (timer.getState().state === 'idle') updateTimeDisplay(settings.workDuration * 60);
     });
   });
-
   $('#setting-sound').addEventListener('change', () => saveSettings());
-
-  $('#setting-autostart').addEventListener('change', async (e) => {
-    await window.api.app.setAutoLaunch(e.target.checked);
-  });
-
-  $('#setting-theme').addEventListener('change', async (e) => {
+  $('#setting-theme').addEventListener('change', (e) => {
     const theme = e.target.checked ? 'dark' : 'light';
     document.body.setAttribute('data-theme', theme);
-    await storage.set('theme', theme);
+    storage.set('theme', theme);
   });
 
-  // ── Start ──
   init();
 })();
